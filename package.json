@@ -1,0 +1,30 @@
+{
+  "name": "@roebot0/apple-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for macOS Apple apps — Notes, Reminders, Calendar, Contacts, Safari. 28 tools.",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node start-mcp-server.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["mcp", "apple", "macos", "notes", "reminders", "calendar", "contacts", "safari", "claude", "claude-code"],
+  "author": "AaronRoeF",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AaronRoeF/apple-mcp"
+  },
+  "engines": { "node": ">=18" },
+  "files": ["dist/", "start-mcp-server.js", "README.md", "LICENSE"],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.8.0",
+    "typescript": "^5.2.0"
+  }
+}
