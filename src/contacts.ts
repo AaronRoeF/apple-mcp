@@ -1,21 +1,71 @@
 import { openDB } from './utils/sqlite.js';
 import { coreDataToISO } from './utils/dates.js';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 import { homedir } from 'os';
+import { join } from 'path';
 
-const CONTACTS_DB_PATH = '~/Library/Application Support/AddressBook/AddressBook-v22.abcddb';
+const ADDRESS_BOOK_DIR = `${homedir()}/Library/Application Support/AddressBook`;
 
 const log = (...args: unknown[]) => console.error('[apple-contacts]', ...args);
 
+/**
+ * Find all populated Contacts SQLite databases. iCloud-synced contacts live under
+ * `AddressBook/Sources/<UUID>/AddressBook-v22.abcddb` (one DB per source — iCloud,
+ * CardDAV, Exchange, etc.), not the top-level `AddressBook-v22.abcddb` which is
+ * the "On My Mac" store and is often empty for iCloud users.
+ *
+ * We return the largest .abcddb found anywhere in the AddressBook tree as a proxy
+ * for "the populated DB." For users with multiple active sources this only covers
+ * the largest; full multi-source support would require scanning all DBs and
+ * unioning results.
+ */
 function resolveContactsDB(): string {
-  const resolved = CONTACTS_DB_PATH.replace('~', homedir());
-  if (!existsSync(resolved)) {
+  if (!existsSync(ADDRESS_BOOK_DIR)) {
     throw new Error(
-      `Apple Contacts database not found at: ${CONTACTS_DB_PATH}\n` +
-      'The database path may differ on this macOS version or contacts may be synced differently.'
+      `Apple Contacts directory not found at: ${ADDRESS_BOOK_DIR}\n` +
+      'The path may differ on this macOS version.'
     );
   }
-  return CONTACTS_DB_PATH;
+
+  const candidates: string[] = [];
+  const topLevel = join(ADDRESS_BOOK_DIR, 'AddressBook-v22.abcddb');
+  if (existsSync(topLevel)) candidates.push(topLevel);
+
+  const sourcesDir = join(ADDRESS_BOOK_DIR, 'Sources');
+  if (existsSync(sourcesDir)) {
+    for (const entry of readdirSync(sourcesDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const candidate = join(sourcesDir, entry.name, 'AddressBook-v22.abcddb');
+      if (existsSync(candidate)) candidates.push(candidate);
+    }
+  }
+
+  if (candidates.length === 0) {
+    throw new Error(
+      `No Apple Contacts databases found under: ${ADDRESS_BOOK_DIR}`
+    );
+  }
+
+  let best: string | null = null;
+  let bestSize = 0;
+  for (const c of candidates) {
+    try {
+      const size = statSync(c).size;
+      if (size > bestSize) {
+        bestSize = size;
+        best = c;
+      }
+    } catch (e) {
+      log(`Skipping unreadable candidate ${c}:`, e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  if (!best) {
+    throw new Error(`Found ${candidates.length} candidate DB(s) but none were readable.`);
+  }
+
+  log(`Using contacts DB: ${best} (${bestSize} bytes)`);
+  return best;
 }
 
 /** Tool definitions for Apple Contacts */
@@ -130,10 +180,11 @@ function handleSearch(args: Record<string, unknown>) {
           OR r.ZLASTNAME LIKE ?
           OR r.ZORGANIZATION LIKE ?
           OR e.ZADDRESS LIKE ?
+          OR (COALESCE(r.ZFIRSTNAME, '') || ' ' || COALESCE(r.ZLASTNAME, '')) LIKE ?
         )
       ORDER BY r.ZSORTINGFIRSTNAME ASC, r.ZSORTINGLASTNAME ASC
       LIMIT ?
-    `).all(pattern, pattern, pattern, pattern, limit) as ContactRow[];
+    `).all(pattern, pattern, pattern, pattern, pattern, limit) as ContactRow[];
 
     return ok(rows.map(formatContact));
   } finally {
