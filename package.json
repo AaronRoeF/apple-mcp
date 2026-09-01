@@ -1,8 +1,11 @@
 {
   "name": "@roebot0/apple-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for macOS Apple apps — Notes, Reminders, Calendar, Contacts, Safari. 28 tools.",
   "main": "dist/index.js",
+  "bin": {
+    "apple-mcp": "./start-mcp-server.js"
+  },
   "type": "module",
   "scripts": {
     "build": "tsc",
